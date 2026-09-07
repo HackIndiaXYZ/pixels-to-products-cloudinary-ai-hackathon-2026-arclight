@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String           @id @default(cuid())
+  name           String?
+  email          String           @unique
+  emailVerified  DateTime?
+  image          String?
+  hashedPassword String?
+  credits        Int              @default(100)
+  plan           String           @default("pro")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  campaigns      Campaign[]
+  mediaAssets    MediaAsset[]
+  analytics      AnalyticsEvent[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Campaign {
+  id              String           @id @default(cuid())
+  userId          String
+  name            String
+  description     String?
+  goal            String?          // e.g. "awareness", "conversion", "engagement"
+  tone            String?          // e.g. "luxury", "playful", "bold", "minimal"
+  status          String           @default("draft") // draft, processing, completed
+  targetAudience  String?
+  colorPreference String?
+  templateId      String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaAssets     MediaAsset[]
+  generatedAssets GeneratedAsset[]
+  marketingCopies MarketingCopy[]
+  generationJobs  GenerationJob[]
+}
+
+model MediaAsset {
+  id                 String           @id @default(cuid())
+  userId             String
+  campaignId         String?
+  cloudinaryPublicId String
+  cloudinaryUrl      String
+  secureUrl          String
+  type               String           @default("IMAGE") // IMAGE, VIDEO
+  originalFilename   String
+  width              Int
+  height             Int
+  size               Int
+  format             String
+  isOriginal         Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign           Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  analysis           MediaAnalysis?
+  transformations    Transformation[]
+  generatedAssets    GeneratedAsset[]
+}
+
+model MediaAnalysis {
+  id                String     @id @default(cuid())
+  mediaAssetId      String     @unique
+  productType       String
+  category          String
+  dominantColors    String     // JSON array string
+  visualStyle       String
+  detectedObjects   String     // JSON array string
+  brand             String?
+  composition       String?
+  backgroundType    String?
+  suggestedAudience String?
+  analysisRaw       String?    // Full AI JSON string
+  createdAt         DateTime   @default(now())
+
+  mediaAsset        MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+}
+
+model GeneratedAsset {
+  id                 String     @id @default(cuid())
+  campaignId         String
+  sourceAssetId      String
+  cloudinaryPublicId String
+  cloudinaryUrl      String
+  secureUrl          String
+  variationType      String     // "bg-removed", "studio-light", "lifestyle", "social-story", "banner"
+  platform           String     // "instagram", "tiktok", "facebook", "linkedin", "e-commerce"
+  width              Int
+  height             Int
+  format             String
+  prompt             String?
+  transformationStr  String?    // Cloudinary transformation string used
+  createdAt          DateTime   @default(now())
+
+  campaign           Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sourceAsset        MediaAsset @relation(fields: [sourceAssetId], references: [id], onDelete: Cascade)
+}
+
+model Transformation {
+  id                 String     @id @default(cuid())
+  mediaAssetId       String
+  cloudinaryUrl      String
+  params             String     // JSON string of transformation parameters
+  format             String
+  width              Int?
+  height             Int?
+  createdAt          DateTime   @default(now())
+
+  mediaAsset         MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+}
+
+model GenerationJob {
+  id         String   @id @default(cuid())
+  campaignId String
+  type       String   // "full-campaign", "variations", "copy"
+  status     String   @default("QUEUED") // QUEUED, PROCESSING, COMPLETED, FAILED
+  progress   Int      @default(0)
+  metadata   String?  // JSON string
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+model MarketingCopy {
+  id               String   @id @default(cuid())
+  campaignId       String
+  title            String
+  shortDesc        String
+  longDesc         String
+  instagramCaption String?
+  facebookCaption  String?
+  linkedinCaption  String?
+  twitterCaption   String?
+  adHeadline       String?
+  adDesc           String?
+  cta              String?
+  hashtags         String?  // JSON array string
+  seoKeywords      String?  // JSON array string
+  createdAt        DateTime @default(now())
+
+  campaign         Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+model Template {
+  id           String   @id @default(cuid())
+  name         String
+  category     String   // "E-commerce", "Luxury", "Minimalist", "Bold & Vibrant", "Social First"
+  aspectRatio  String   // "1:1", "9:16", "16:9", "4:5"
+  bgStyle      String
+  description  String
+  thumbnailUrl String
+  presetParams String   // JSON string of transformation presets
+  isPopular    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // "asset_created", "campaign_published", "download", "transformation"
+  metadata  String?  // JSON string
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
